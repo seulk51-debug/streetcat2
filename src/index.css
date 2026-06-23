@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    overscroll-behavior: none;
+  }
+  body {
+    font-family: 'Jua', 'Gaegu', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    background: #2b2233;
+    color: #4a3a2c;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-3xl bg-milk/95 shadow-xl border border-crust/20;
+  }
+  .btn {
+    @apply rounded-2xl px-4 py-2 font-bold shadow-md active:scale-95 transition-transform select-none;
+  }
+  .btn-primary {
+    @apply btn bg-toast text-cocoa hover:brightness-105;
+  }
+  .btn-eco {
+    @apply btn bg-ecogreen text-white hover:brightness-105;
+  }
+  .btn-gold {
+    @apply btn bg-gold text-white hover:brightness-105;
+  }
+  .btn-ghost {
+    @apply btn bg-white/70 text-cocoa border border-crust/20;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-bold;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* 모바일 세로형 게임 컨테이너 가운데 정렬 */
+.app-frame {
+  width: 100%;
+  max-width: 440px;
+  height: 100%;
+  max-height: 940px;
+  position: relative;
+  overflow: hidden;
+}

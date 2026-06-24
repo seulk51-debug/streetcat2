@@ -17,7 +17,8 @@ const RARITY_COLOR = {
 const STREET_WORLD = 1.7 // 화면 대비 골목 월드 가로 배율 (좌우 슬라이드로 둘러보기)
 // 뒷골목(alley) 전용 배경 이미지
 const ALLEY_BG = '/map/street/backstreet.png'
-const ALLEY_BG_KEY = 'alleyBg'
+const ALLEY_BG_SRC = 'alleyBg_src' // 원본 로드 키
+const ALLEY_BG_KEY = 'alleyBg' // 2^n 캔버스(mipmap용) 키
 const ALLEY_BG_ASPECT = 3168 / 1344 // 그림 가로:세로 비율 (와이드)
 const ALLEY_FLOOR = 0.75 // 그림에서 벽/바닥 경계 위치(높이 비율)
 
@@ -35,7 +36,9 @@ export default class StreetScene extends Phaser.Scene {
   }
 
   preload() {
-    if (!this.textures.exists(ALLEY_BG_KEY)) this.load.image(ALLEY_BG_KEY, ALLEY_BG)
+    if (!this.textures.exists(ALLEY_BG_SRC) && !this.textures.exists(ALLEY_BG_KEY)) {
+      this.load.image(ALLEY_BG_SRC, ALLEY_BG)
+    }
     for (const [key, path] of Object.entries(CAT_SPRITES)) {
       const k = 'streetCat_' + key
       if (!this.textures.exists(k)) this.load.image(k, path)
@@ -46,6 +49,7 @@ export default class StreetScene extends Phaser.Scene {
     const { width, height } = this.scale.gameSize
     this.W = width
     this.H = height
+    this.buildAlleyTexture() // 큰 배경을 2^n 캔버스로 다시 그려 부드러운 축소(mipmap) 지원
     this._lastZone = useGame.getState().currentZone
     this.worldW = this.worldWidthFor() // 좌우로 슬라이드할 전체 월드 너비
 
@@ -110,6 +114,22 @@ export default class StreetScene extends Phaser.Scene {
       e.container.y = Phaser.Math.Clamp(e.container.y, this.floorTop() + 10, this.H - 16)
     }
     this.applyWeather(useGame.getState().weather, true)
+  }
+
+  // 원본 뒷골목 이미지를 2^n(2048x1024) 캔버스로 고품질 다운스케일 → mipmap 생성 가능.
+  // 표시는 setDisplaySize 로 원래 비율(가로 2.36)에 맞추므로 캔버스가 2:1이어도 왜곡 없음.
+  buildAlleyTexture() {
+    if (this.textures.exists(ALLEY_BG_KEY)) return
+    if (!this.textures.exists(ALLEY_BG_SRC)) return
+    const src = this.textures.get(ALLEY_BG_SRC).getSourceImage()
+    if (!src) return
+    const cv = this.textures.createCanvas(ALLEY_BG_KEY, 2048, 1024)
+    if (!cv) return
+    const ctx = cv.getContext()
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(src, 0, 0, 2048, 1024)
+    cv.refresh()
   }
 
   makeTextures() {

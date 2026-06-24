@@ -25,7 +25,8 @@ export default function PhaserGame({ scenes, active, data, className = '', onRea
       },
       physics: { default: 'arcade', arcade: { debug: false } },
       // 씬은 ready 이후 수동 등록 → data 와 함께 정확히 한 번만 시작
-      render: { antialias: true, roundPixels: false },
+      // mipmapFilter: 2^n 텍스처를 축소할 때 trilinear 보간 → 부드럽게(깨짐 방지)
+      render: { antialias: true, roundPixels: false, mipmapFilter: 'LINEAR_MIPMAP_LINEAR' },
     })
     gameRef.current = game
 

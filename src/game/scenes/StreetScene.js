@@ -1,9 +1,12 @@
 import Phaser from 'phaser'
 import { useGame } from '../../state/store'
 import { sfx } from '../../audio/sound'
+import { installPanZoom } from '../cameraControl'
+import { CAT_SPRITE_BY_ID, CAT_SPRITE_PATHS, DEFAULT_CAT_SPRITE } from '../../data/cats'
 
-// public/ 아래 정적 에셋 — 임시로 모든 길고양이에 동일 이미지 사용
-const CAT_IMG = '/cat/americanshothair/idle.png'
+// public/cat/<key>/idle.png 실사 스프라이트 (cats.js 공용)
+const CAT_SPRITES = CAT_SPRITE_PATHS
+const texKeyFor = (rosterId) => 'streetCat_' + (CAT_SPRITE_BY_ID[rosterId] || DEFAULT_CAT_SPRITE)
 
 const RARITY_COLOR = {
   common: 0xb8b2a6,
@@ -11,6 +14,12 @@ const RARITY_COLOR = {
   epic: 0xa872e8,
   legendary: 0xf2b441,
 }
+const STREET_WORLD = 1.7 // 화면 대비 골목 월드 가로 배율 (좌우 슬라이드로 둘러보기)
+// 뒷골목(alley) 전용 배경 이미지
+const ALLEY_BG = '/map/street/backstreet.png'
+const ALLEY_BG_KEY = 'alleyBg'
+const ALLEY_BG_ASPECT = 3168 / 1344 // 그림 가로:세로 비율 (와이드)
+const ALLEY_FLOOR = 0.75 // 그림에서 벽/바닥 경계 위치(높이 비율)
 
 // 길거리(골목) 씬 — 출몰한 길고양이가 직접 걸어 들어와 배회하고,
 // 탭하면 React 상호작용 시트(간식/눈인사/입양)가 열립니다.
@@ -26,18 +35,27 @@ export default class StreetScene extends Phaser.Scene {
   }
 
   preload() {
-    if (!this.textures.exists('streetCat')) this.load.image('streetCat', CAT_IMG)
+    if (!this.textures.exists(ALLEY_BG_KEY)) this.load.image(ALLEY_BG_KEY, ALLEY_BG)
+    for (const [key, path] of Object.entries(CAT_SPRITES)) {
+      const k = 'streetCat_' + key
+      if (!this.textures.exists(k)) this.load.image(k, path)
+    }
   }
 
   create() {
     const { width, height } = this.scale.gameSize
     this.W = width
     this.H = height
+    this._lastZone = useGame.getState().currentZone
+    this.worldW = this.worldWidthFor() // 좌우로 슬라이드할 전체 월드 너비
 
     this.cats = new Map() // uid -> entry
 
     this.bg = this.add.graphics().setDepth(-100)
     this.glow = this.add.graphics().setDepth(-90)
+    this.alleyImg = this.textures.exists(ALLEY_BG_KEY)
+      ? this.add.image(0, 0, ALLEY_BG_KEY).setOrigin(0, 0).setDepth(-101).setVisible(false)
+      : null
     this.weatherEmitter = null
     this._weather = null
 
@@ -53,6 +71,9 @@ export default class StreetScene extends Phaser.Scene {
     this.waterBowl = this.add.text(0, 0, '💧', { fontSize: '20px' }).setOrigin(0.5, 1)
     this.snackBowl = this.add.text(0, 0, '🍤', { fontSize: '20px' }).setOrigin(0.5, 1)
     this.positionProps()
+
+    // 좌우 슬라이드 + 확대/축소 (축소 시 바깥 여백은 회색)
+    installPanZoom(this, { marginColor: 0x9a9a9a })
 
     this._dirty = true
     this.unsub = useGame.subscribe(() => {
@@ -79,11 +100,13 @@ export default class StreetScene extends Phaser.Scene {
   onResize(gameSize) {
     this.W = gameSize.width
     this.H = gameSize.height
+    this.worldW = this.worldWidthFor()
+    this.refreshCameraBounds && this.refreshCameraBounds()
     this.layout()
     this.positionProps()
     // 화면 밖으로 나간 고양이 되돌리기
     for (const [, e] of this.cats) {
-      e.container.x = Phaser.Math.Clamp(e.container.x, 36, this.W - 36)
+      e.container.x = Phaser.Math.Clamp(e.container.x, 36, this.worldW - 36)
       e.container.y = Phaser.Math.Clamp(e.container.y, this.floorTop() + 10, this.H - 16)
     }
     this.applyWeather(useGame.getState().weather, true)
@@ -102,44 +125,71 @@ export default class StreetScene extends Phaser.Scene {
     g.destroy()
   }
 
+  // alley 구역이고 배경 이미지가 로드됐는지
+  isAlleyImg() {
+    return useGame.getState().currentZone === 'alley' && this.textures.exists(ALLEY_BG_KEY)
+  }
+
+  // 현재 구역에 맞는 월드 너비 (뒷골목 이미지면 그림 비율, 그 외엔 화면×배율)
+  worldWidthFor() {
+    return this.isAlleyImg()
+      ? Math.max(this.W, Math.round(this.H * ALLEY_BG_ASPECT))
+      : Math.round(this.W * STREET_WORLD)
+  }
+
   floorTop() {
-    return this.H * 0.56
+    return this.H * (this.isAlleyImg() ? ALLEY_FLOOR : 0.56)
   }
 
   layout() {
     const ft = this.floorTop()
+    this.bg.clear()
+    this.glow.clear()
+
+    // 뒷골목: 절차적 배경 대신 이미지로 채움
+    if (this.isAlleyImg()) {
+      if (this.alleyImg) this.alleyImg.setVisible(true).setPosition(0, 0).setDisplaySize(this.worldW, this.H)
+      return
+    }
+    if (this.alleyImg) this.alleyImg.setVisible(false)
+
     const g = this.bg
-    g.clear()
     // 젖은 골목 길바닥 (React 야경 그라데이션 위에 반투명으로 얹음)
     g.fillStyle(0x241f3a, 0.55)
-    g.fillRect(0, ft, this.W, this.H - ft)
+    g.fillRect(0, ft, this.worldW, this.H - ft)
     // 인도 경계
     g.fillStyle(0xffffff, 0.06)
-    g.fillRect(0, ft, this.W, 3)
+    g.fillRect(0, ft, this.worldW, 3)
     // 바닥 타일 결
     g.lineStyle(1, 0xffffff, 0.04)
     for (let i = 1; i < 5; i++) {
       const y = ft + ((this.H - ft) / 5) * i
-      g.lineBetween(0, y, this.W, y)
+      g.lineBetween(0, y, this.worldW, y)
     }
 
-    // 가로등 불빛 (따뜻한 원뿔)
+    // 가로등 불빛 (따뜻한 원뿔) — 월드 양쪽에 하나씩
     const lg = this.glow
-    lg.clear()
-    lg.fillStyle(0xffe6a6, 0.1)
-    lg.fillEllipse(this.W * 0.5, ft + (this.H - ft) * 0.55, this.W * 1.15, (this.H - ft) * 1.5)
-    lg.fillStyle(0xffe6a6, 0.07)
-    lg.fillEllipse(this.W * 0.5, ft + (this.H - ft) * 0.4, this.W * 0.7, (this.H - ft) * 1.1)
+    for (const cx of [this.worldW * 0.28, this.worldW * 0.72]) {
+      lg.fillStyle(0xffe6a6, 0.1)
+      lg.fillEllipse(cx, ft + (this.H - ft) * 0.55, this.W * 0.9, (this.H - ft) * 1.5)
+      lg.fillStyle(0xffe6a6, 0.07)
+      lg.fillEllipse(cx, ft + (this.H - ft) * 0.4, this.W * 0.55, (this.H - ft) * 1.1)
+    }
   }
 
   positionProps() {
     const ft = this.floorTop()
-    if (this.lantern) this.lantern.setPosition(this.W * 0.5, ft - 34).setDepth(1)
-    if (this.box) this.box.setPosition(this.W * 0.13, ft + 30).setDepth(ft + 30)
-    if (this.bin) this.bin.setPosition(this.W * 0.88, ft + 36).setDepth(ft + 36)
-    if (this.foodBowl) this.foodBowl.setPosition(this.W * 0.36, ft + 26).setDepth(ft + 26)
-    if (this.waterBowl) this.waterBowl.setPosition(this.W * 0.5, ft + 24).setDepth(ft + 24)
-    if (this.snackBowl) this.snackBowl.setPosition(this.W * 0.64, ft + 24).setDepth(ft + 24)
+    if (this.lantern) this.lantern.setPosition(this.worldW * 0.5, ft - 34).setDepth(1)
+    if (this.box) this.box.setPosition(this.worldW * 0.13, ft + 30).setDepth(ft + 30)
+    if (this.bin) this.bin.setPosition(this.worldW * 0.88, ft + 36).setDepth(ft + 36)
+    if (this.foodBowl) this.foodBowl.setPosition(this.worldW * 0.36, ft + 26).setDepth(ft + 26)
+    if (this.waterBowl) this.waterBowl.setPosition(this.worldW * 0.5, ft + 24).setDepth(ft + 24)
+    if (this.snackBowl) this.snackBowl.setPosition(this.worldW * 0.64, ft + 24).setDepth(ft + 24)
+    // 뒷골목 이미지엔 가로등/박스/쓰레기통이 이미 그려져 있어 중복 소품은 숨김
+    const hideDecor = this.isAlleyImg()
+    if (this.lantern) this.lantern.setVisible(!hideDecor)
+    if (this.box) this.box.setVisible(!hideDecor)
+    if (this.bin) this.bin.setVisible(!hideDecor)
   }
 
   refreshBowls() {
@@ -152,6 +202,14 @@ export default class StreetScene extends Phaser.Scene {
   // ── 스토어 → 씬 ─────────────────────────────────
   syncFromStore() {
     const st = useGame.getState()
+    // 구역 전환 시 월드/카메라/배경 갱신 (뒷골목 이미지 ↔ 다른 구역 절차적 배경)
+    if (st.currentZone !== this._lastZone) {
+      this._lastZone = st.currentZone
+      this.worldW = this.worldWidthFor()
+      this.centerCamera && this.centerCamera(true)
+      this.layout()
+      this.positionProps()
+    }
     const live = new Set()
     for (const cat of st.streetCats) {
       live.add(cat.uid)
@@ -179,9 +237,10 @@ export default class StreetScene extends Phaser.Scene {
 
     const shadow = this.add.ellipse(0, 0, 66, 16, 0x000000, 0.28)
 
-    const spr = this.add.image(0, 0, 'streetCat').setOrigin(0.5, 1)
+    const texKey = texKeyFor(cat.rosterId)
+    const spr = this.add.image(0, 0, texKey).setOrigin(0.5, 1)
     const H_DISP = 112
-    const tex = this.textures.get('streetCat')
+    const tex = this.textures.get(texKey)
     const natH = tex && tex.getSourceImage() ? tex.getSourceImage().height : H_DISP
     const scaleVal = H_DISP / natH
     spr.setScale(scaleVal)
@@ -250,8 +309,8 @@ export default class StreetScene extends Phaser.Scene {
     })
 
     // 등장 연출 — 골목 한쪽에서 걸어 들어옴
-    const side = Math.random() < 0.5 ? -50 : this.W + 50
-    const targetX = Phaser.Math.Between(60, this.W - 60)
+    const side = Math.random() < 0.5 ? -50 : this.worldW + 50
+    const targetX = Phaser.Math.Between(60, this.worldW - 60)
     const y = Phaser.Math.Between(ft + 24, this.H - 28)
     c.setPosition(side, y)
     c.setDepth(y)
@@ -337,7 +396,7 @@ export default class StreetScene extends Phaser.Scene {
       if (now < e.restUntil) continue
       const roll = Math.random()
       if (roll < 0.55) {
-        const tx = Phaser.Math.Between(46, this.W - 46)
+        const tx = Phaser.Math.Between(46, this.worldW - 46)
         const ty = Phaser.Math.Between(ft + 24, this.H - 28)
         const c = e.container
         const dist = Phaser.Math.Distance.Between(c.x, c.y, tx, ty)
@@ -378,7 +437,7 @@ export default class StreetScene extends Phaser.Scene {
     if (weather === 'rain') {
       this.weatherEmitter = this.add
         .particles(0, -10, 'rainTexS', {
-          x: { min: 0, max: this.W },
+          x: { min: 0, max: this.worldW },
           y: -10,
           quantity: 2,
           frequency: 55,
@@ -392,7 +451,7 @@ export default class StreetScene extends Phaser.Scene {
     } else if (weather === 'snow') {
       this.weatherEmitter = this.add
         .particles(0, -10, 'snowTexS', {
-          x: { min: 0, max: this.W },
+          x: { min: 0, max: this.worldW },
           y: -10,
           quantity: 1,
           frequency: 130,

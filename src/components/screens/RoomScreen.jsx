@@ -3,7 +3,7 @@ import { useGame, selectCapacity } from '../../state/store'
 import { SPACES, COSTUMES } from '../../data/shop'
 import PhaserGame from '../../game/PhaserGame'
 import RoomScene from '../../game/scenes/RoomScene'
-import { Bar, play } from '../ui'
+import { Bar, play, ZoomControls } from '../ui'
 import CatDetailModal from '../modals/CatDetailModal'
 
 const COS = Object.fromEntries(COSTUMES.map((c) => [c.id, c]))
@@ -81,6 +81,9 @@ export default function RoomScreen() {
           </div>
         </div>
       )}
+
+      {/* 확대/축소 버튼 */}
+      <ZoomControls className="absolute right-2 top-[40%] z-20 pointer-events-auto" />
 
       {/* ── 하단 케어 독 ── */}
       <div className="absolute bottom-[78px] inset-x-0 px-3 z-20 pointer-events-none">

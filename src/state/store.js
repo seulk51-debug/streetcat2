@@ -99,6 +99,7 @@ const INITIAL = {
   roomStats: { litter: 80, water: 80 }, // 공용 환경 청결도
   activeWall: 'wall_cream',
   activeFloor: 'floor_wood',
+  furnitureUsage: {}, // { [furnUid]: catUid } 현재 그 가구를 사용 중인 고양이 (휘발성, 저장 제외)
 
   // ── 가챠/코스튬 ──
   ownedCostumes: [],
@@ -137,6 +138,9 @@ const INITIAL = {
   tutorialDone: false,
   soundOn: true,
   toasts: [], // 임시 알림 (UI consume)
+  // 카메라 줌 명령 (UI 버튼 → Phaser 씬). 휘발성.
+  zoomNonce: 0,
+  zoomAction: null, // 'in' | 'out' | 'reset'
 }
 
 export const useGame = create(
@@ -148,6 +152,8 @@ export const useGame = create(
       // 공통 유틸
       // ─────────────────────────────────────────────
       setScreen: (screen) => set({ screen }),
+      // 줌 버튼 → 씬이 구독하는 명령. nonce 증가로 매번 트리거.
+      cameraZoom: (action) => set((s) => ({ zoomAction: action, zoomNonce: (s.zoomNonce || 0) + 1 })),
       // 토스트는 최대 6개까지만 보관(초과 시 가장 오래된 것부터 폐기) → 무한 누적 방지
       toast: (text, emoji = '✨') =>
         set((s) => ({ toasts: [...s.toasts, { id: uid(), text, emoji }].slice(-6) })),
@@ -514,6 +520,27 @@ export const useGame = create(
         set((s) => ({ placedFurniture: s.placedFurniture.map((f) => (f.uid === furnUid ? { ...f, x, y } : f)) })),
       removeFurniture: (furnUid) =>
         set((s) => ({ placedFurniture: s.placedFurniture.filter((f) => f.uid !== furnUid) })),
+      // 가구 사용 점유 표시(씬에서 호출). catUid=null 이면 사용 종료.
+      setFurnitureUse: (furnUid, catUid) =>
+        set((s) => {
+          const cur = s.furnitureUsage || {}
+          if (catUid) {
+            if (cur[furnUid] === catUid) return {}
+            return { furnitureUsage: { ...cur, [furnUid]: catUid } }
+          }
+          if (!(furnUid in cur)) return {}
+          const next = { ...cur }
+          delete next[furnUid]
+          return { furnitureUsage: next }
+        }),
+      clearFurnitureUse: () => set({ furnitureUsage: {} }),
+      // 고양이가 가구를 사용할 때의 소소한 기분 보상
+      enjoyFurniture: (catUid) =>
+        set((st) => ({
+          ownedCats: st.ownedCats.map((c) =>
+            c.uid === catUid ? { ...c, mood: clamp(c.mood + 1.5), condition: clamp(c.condition + 0.2) } : c
+          ),
+        })),
       grantFurniture: (item) =>
         set((s) => ({
           placedFurniture: [...s.placedFurniture, { uid: uid(), itemId: item.id, x: 0.5, y: 0.4, granted: item }],
@@ -802,8 +829,8 @@ export const useGame = create(
     {
       name: 'breadcat-save',
       partialize: (s) => {
-        // toasts 등 휘발성 제외
-        const { toasts, ...rest } = s
+        // toasts, furnitureUsage 등 휘발성 제외
+        const { toasts, furnitureUsage, zoomNonce, zoomAction, ...rest } = s
         return rest
       },
     }

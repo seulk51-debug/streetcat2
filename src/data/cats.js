@@ -208,6 +208,32 @@ export const CAT_ROSTER = [
   },
 ]
 
+// 길거리 스폰 시 사용할 실사 스프라이트 (public/cat/<key>/idle.png) — 외형이 가까운 것으로 매핑
+export const CAT_SPRITE_BY_ID = {
+  sikppang: 'brown',
+  cheese: 'cheese',
+  turkish: 'americanshothair',
+  tuxedo: 'tuxido',
+  calico: 'samsaek',
+  gray: 'americanshothair',
+  snow: 'americanshothair',
+  rainboss: 'americanshothair',
+  golden: 'cheese',
+  kitten: 'brown',
+  siamese: 'brown',
+  orange: 'cheese',
+}
+
+// 스프라이트 키 → 이미지 경로 (길거리·우리집 공용)
+export const CAT_SPRITE_PATHS = {
+  americanshothair: '/cat/americanshothair/idle.png',
+  brown: '/cat/brown/idle.png',
+  cheese: '/cat/cheese/idle.png',
+  samsaek: '/cat/samsaek/idle.png',
+  tuxido: '/cat/tuxido/idle.png',
+}
+export const DEFAULT_CAT_SPRITE = 'americanshothair'
+
 export const RARITY_META = {
   common: { label: '일반', color: '#9AA0A6', adoptReward: 30 },
   rare: { label: '레어', color: '#5BA8E8', adoptReward: 80 },

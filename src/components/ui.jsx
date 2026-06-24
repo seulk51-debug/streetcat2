@@ -1,6 +1,20 @@
 // 공용 UI 프리미티브 — 화면 전반에서 재사용.
 import { useEffect } from 'react'
 import { sfx, unlockAudio } from '../audio/sound'
+import { useGame } from '../state/store'
+
+// 화면 우측 확대/축소 버튼 (Phaser 카메라 줌 명령)
+export function ZoomControls({ className = '' }) {
+  const cameraZoom = useGame((s) => s.cameraZoom)
+  const tap = (action) => () => { play(); cameraZoom(action) }
+  return (
+    <div className={`flex flex-col gap-1.5 ${className}`}>
+      <button onClick={tap('in')} className="w-9 h-9 rounded-full bg-white/85 shadow-md text-cocoa text-xl font-bold grid place-items-center active:scale-90 transition">＋</button>
+      <button onClick={tap('out')} className="w-9 h-9 rounded-full bg-white/85 shadow-md text-cocoa text-xl font-bold grid place-items-center active:scale-90 transition">－</button>
+      <button onClick={tap('reset')} className="w-9 h-9 rounded-full bg-white/70 shadow-md text-cocoa/55 text-[10px] font-bold grid place-items-center active:scale-90 transition">1:1</button>
+    </div>
+  )
+}
 
 export function play(name = 'click') {
   unlockAudio()

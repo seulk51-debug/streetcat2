@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { useGame, PERSONALITIES } from '../../state/store'
 import { SNACKS } from '../../data/cats'
 import { STREET_ZONES, FEEDER_UPGRADES, WEATHERS } from '../../data/world'
-import { Bar, Modal, RarityTag, play } from '../ui'
+import { Bar, Modal, RarityTag, play, ZoomControls } from '../ui'
 import PhaserGame from '../../game/PhaserGame'
 import StreetScene from '../../game/scenes/StreetScene'
 import TimingBar from '../TimingBar'
@@ -44,6 +44,9 @@ export default function StreetScreen() {
 
       {/* 살아있는 골목 — 고양이가 걸어 들어와 배회 */}
       <PhaserGame scenes={[StreetScene]} active="StreetScene" data={{ onSelect: onSelectCat }} className="absolute inset-0" />
+
+      {/* 확대/축소 버튼 */}
+      <ZoomControls className="absolute right-2 top-[46%] z-20 pointer-events-auto" />
 
       {/* ── 상단 오버레이: 구역 + 급식소 ── */}
       <div className="absolute top-14 inset-x-0 px-3 z-20 pointer-events-none">
